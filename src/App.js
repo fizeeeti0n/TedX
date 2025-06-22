@@ -1,6 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { initializeApp } from 'firebase/app';
+import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from 'firebase/auth';
+import { getFirestore } from 'firebase/firestore';
 
-// Import components - Corrected paths with .js extension
+// Import components
 import Notification from './components/Notification.js';
 import HomePage from './pages/HomePage.js';
 import WatchPage from './pages/WatchPage.js';
@@ -9,7 +12,7 @@ import AttendPage from './pages/AttendPage.js';
 import ParticipatePage from './pages/ParticipatePage.js';
 import AboutPage from './pages/AboutPage.js';
 import SignInPage from './pages/SignInPage.js';
-import MembershipPage from './pages/MembershipPage.js';
+import MembershipPage from './pages/MembershipPage.js'; // Will be updated to use Firebase
 import SearchPage from './pages/SearchPage.js';
 import BeforeYouStartPage from './pages/BeforeYouStartPage.js';
 import ApplyForLicensePage from './pages/ApplyForLicensePage.js';
@@ -18,13 +21,65 @@ import ResourcesPage from './pages/ResourcesPage.js';
 import PrivacyPolicyPage from './pages/PrivacyPolicyPage.js';
 import TermsOfUsePage from './pages/TermsOfUsePage.js';
 import ContactPage from './pages/ContactPage.js';
+import SignUpPage from './pages/SignUpPage.js';
 
 // Main App component
 const App = () => {
-    // State to manage the current active page, initialized to 'home'
     const [currentPage, setCurrentPage] = useState('home');
-    // State to manage notification messages (message and type: success, error, info)
     const [notification, setNotification] = useState({ message: '', type: '' });
+    const [db, setDb] = useState(null); // State for Firestore instance
+    const [auth, setAuth] = useState(null); // State for Auth instance
+    const [userId, setUserId] = useState(null); // State for current user ID
+    const [isAuthReady, setIsAuthReady] = useState(false); // State to track auth readiness
+    const [appId, setAppId] = useState(null); // State for app ID
+
+    // Initialize Firebase and authenticate user
+    useEffect(() => {
+        try {
+            // Get app ID from global variable or use a default
+            const currentAppId = typeof __app_id !== 'undefined' ? __app_id : 'default-tedx-app';
+            setAppId(currentAppId);
+
+            // Parse Firebase config from global variable
+            const firebaseConfig = typeof __firebase_config !== 'undefined'
+                ? JSON.parse(__firebase_config)
+                : {}; // Fallback to empty object if not defined
+
+            // Initialize Firebase app
+            const app = initializeApp(firebaseConfig);
+            const authInstance = getAuth(app);
+            const firestoreInstance = getFirestore(app);
+
+            setAuth(authInstance);
+            setDb(firestoreInstance);
+
+            // Listen for authentication state changes
+            const unsubscribe = onAuthStateChanged(authInstance, async (user) => {
+                if (user) {
+                    setUserId(user.uid);
+                } else {
+                    // Sign in anonymously if no user is logged in
+                    try {
+                        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                            await signInWithCustomToken(authInstance, __initial_auth_token);
+                        } else {
+                            await signInAnonymously(authInstance);
+                        }
+                    } catch (error) {
+                        console.error("Firebase authentication error:", error);
+                        setNotification({ message: "Authentication failed. Please try again.", type: 'error' });
+                    }
+                }
+                setIsAuthReady(true); // Mark authentication as ready
+            });
+
+            // Cleanup subscription on component unmount
+            return () => unsubscribe();
+        } catch (error) {
+            console.error("Failed to initialize Firebase:", error);
+            setNotification({ message: "Failed to initialize application services.", type: 'error' });
+        }
+    }, []); // Empty dependency array means this effect runs once on mount
 
     /**
      * Navigates to a specified page and scrolls the window to the top.
@@ -60,8 +115,14 @@ const App = () => {
     /**
      * Renders the appropriate page component based on the `currentPage` state.
      * Passes `navigate` and `setNotification` props to child components as needed.
+     * Also passes Firebase `db`, `auth`, `userId`, `appId` when ready.
      */
     const renderPage = () => {
+        // Ensure Firebase instances and user ID are ready before rendering pages that depend on them
+        if (!isAuthReady || !db || !auth || !userId || !appId) {
+            return <div className="text-center text-gray-600 mt-10">Loading application...</div>;
+        }
+
         switch (currentPage) {
             case 'home':
                 return <HomePage navigate={navigate} />;
@@ -76,9 +137,10 @@ const App = () => {
             case 'about':
                 return <AboutPage />;
             case 'sign-in':
-                return <SignInPage setNotification={setNotification} />;
+                return <SignInPage setNotification={setNotification} navigate={navigate} />;
             case 'membership':
-                return <MembershipPage setNotification={setNotification} />;
+                // Pass Firebase instances to MembershipPage
+                return <MembershipPage setNotification={setNotification} db={db} auth={auth} userId={userId} appId={appId} />;
             case 'search':
                 return <SearchPage />;
             case 'before-you-start':
@@ -95,6 +157,8 @@ const App = () => {
                 return <TermsOfUsePage />;
             case 'contact':
                 return <ContactPage setNotification={setNotification} />;
+            case 'sign-up':
+                return <SignUpPage setNotification={setNotification} navigate={navigate} />;
             default:
                 return <HomePage navigate={navigate} />; // Fallback to home page
         }
