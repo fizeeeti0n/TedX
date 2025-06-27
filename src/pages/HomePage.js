@@ -13,12 +13,8 @@ const HomePage = ({ navigate }) => {
     // Placeholder image URLs for the carousel.
     // In a real application, these would typically come from an API or a content management system.
     const images = [
-        // Image resembling the main banner with red background and person climbing
-        "https://placehold.co/800x450/E62B1E/FFFFFF?text=TEDx+Main+Banner",
-        // Image resembling a large audience in an auditorium
-        "https://placehold.co/800x450/4A4A4A/FFFFFF?text=TEDx+Audience",
-        // Image resembling a speaker on stage with a large screen
-        "https://placehold.co/800x450/2B8C65/FFFFFF?text=TEDx+Speaker+Stage"
+     '/photos/TedX_banner.jpg',
+       
     ];
     
     /**
